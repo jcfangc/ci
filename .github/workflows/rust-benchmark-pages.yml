@@ -1,0 +1,134 @@
+name: Reusable Rust Benchmark Pages
+
+on:
+  workflow_call:
+    inputs:
+      bench_profile:
+        type: string
+        required: false
+        default: report
+      rust_toolchain:
+        type: string
+        required: false
+        default: stable
+      package_version_file:
+        type: string
+        required: false
+        default: Cargo.toml
+      pages_artifact_path:
+        type: string
+        required: false
+        default: target/criterion
+      run_command:
+        type: string
+        required: false
+        default: cargo bench
+      plotly_script_path:
+        type: string
+        required: false
+        default: .github/scripts/bench/render_criterion_plotly.py
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  gate:
+    name: Check version change
+    runs-on: ubuntu-latest
+
+    outputs:
+      should_run: ${{ steps.gate.outputs.should_run }}
+
+    steps:
+      - name: Checkout caller repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout CI scripts
+        uses: actions/checkout@v4
+        with:
+          repository: jcfangc/ci
+          path: .ci
+
+      - name: Check whether benchmark pages should run
+        id: gate
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_EVENT_BEFORE: ${{ github.event.before }}
+          GITHUB_SHA: ${{ github.sha }}
+          PACKAGE_VERSION_FILE: ${{ inputs.package_version_file }}
+        run: python3 .ci/.github/scripts/bench/should_run_benchmark_pages.py
+
+  build:
+    name: Build Criterion report
+    needs: gate
+    if: needs.gate.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout caller repository
+        uses: actions/checkout@v4
+
+      - name: Checkout CI scripts
+        uses: actions/checkout@v4
+        with:
+          repository: jcfangc/ci
+          path: .ci
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ inputs.rust_toolchain }}
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run Criterion benchmarks
+        env:
+          BENCH_PROFILE: ${{ inputs.bench_profile }}
+        run: |
+          rm -rf target/criterion
+          ${{ inputs.run_command }}
+
+      - name: Render Plotly comparison report
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install plotly
+          python3 .ci/.github/scripts/bench/render_criterion_plotly.py
+
+      - name: Prepare Pages site
+        run: |
+          set -euo pipefail
+
+          test -f target/criterion/index.html
+          test -f target/criterion/.nojekyll
+          test -f target/criterion/report/index.html
+          test -f target/criterion/compare-plotly/index.html
+
+          find target/criterion -maxdepth 3 -type f | sort | sed -n '1,120p'
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ inputs.pages_artifact_path }}
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    if: needs.build.result == 'success'
+    runs-on: ubuntu-latest
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

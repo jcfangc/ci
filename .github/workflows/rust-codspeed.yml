@@ -1,0 +1,45 @@
+name: Reusable Rust CodSpeed
+
+on:
+  workflow_call:
+    inputs:
+      rust_toolchain:
+        type: string
+        required: false
+        default: stable
+      build_command:
+        type: string
+        required: false
+        default: cargo codspeed build -m simulation
+      run_command:
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  benchmarks:
+    name: Run CodSpeed benchmarks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout caller repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust and cargo-codspeed
+        uses: moonrepo/setup-rust@v0
+        with:
+          channel: ${{ inputs.rust_toolchain }}
+          cache-target: release
+          bins: cargo-codspeed
+
+      - name: Build benchmark targets
+        run: ${{ inputs.build_command }}
+
+      - name: Run regression benchmarks
+        uses: CodSpeedHQ/action@v4
+        with:
+          mode: simulation
+          run: ${{ inputs.run_command }}

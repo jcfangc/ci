@@ -1,0 +1,114 @@
+name: Reusable Rust Crates Release
+
+on:
+  workflow_call:
+    inputs:
+      mode:
+        type: string
+        required: false
+        default: dryrun
+      tag_dryrun:
+        type: string
+        required: false
+        default: "false"
+      rust_toolchain:
+        type: string
+        required: false
+        default: stable
+      test_command:
+        type: string
+        required: false
+        default: cargo test --locked
+      package_manifest:
+        type: string
+        required: false
+        default: Cargo.toml
+      run_tests:
+        type: boolean
+        required: false
+        default: true
+    secrets:
+      CRATES_IO_TOKEN:
+        required: true
+
+concurrency:
+  group: crates-release-main
+  cancel-in-progress: false
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+
+    outputs:
+      changed: ${{ steps.v.outputs.changed }}
+      version: ${{ steps.v.outputs.version }}
+      prev_version: ${{ steps.v.outputs.prev_version }}
+
+    steps:
+      - name: Checkout caller repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Checkout CI scripts
+        uses: actions/checkout@v5
+        with:
+          repository: jcfangc/ci
+          path: .ci
+
+      - id: v
+        name: Detect version
+        env:
+          PACKAGE_MANIFEST: ${{ inputs.package_manifest }}
+        run: python3 .ci/.github/scripts/release/detect_version.py
+
+  publish_and_tag:
+    needs: [detect]
+    if: |
+      (github.event_name == 'push' && needs.detect.outputs.changed == 'true') ||
+      (github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout caller repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Checkout CI scripts
+        uses: actions/checkout@v5
+        with:
+          repository: jcfangc/ci
+          path: .ci
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ inputs.rust_toolchain }}
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Compile Python scripts
+        run: python3 -m compileall .ci/.github/scripts
+
+      - name: Test
+        if: inputs.run_tests
+        run: ${{ inputs.test_command }}
+
+      - name: Publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+          RELEASE_MODE: ${{ inputs.mode }}
+          PACKAGE_MANIFEST: ${{ inputs.package_manifest }}
+        run: python3 .ci/.github/scripts/release/publish.py
+
+      - name: Create and push tag
+        env:
+          RELEASE_VERSION: ${{ needs.detect.outputs.version }}
+          RELEASE_MODE: ${{ inputs.mode }}
+          TAG_DRYRUN: ${{ inputs.tag_dryrun }}
+        run: python3 .ci/.github/scripts/release/tag_release.py
