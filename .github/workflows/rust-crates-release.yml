@@ -31,10 +31,6 @@ on:
       CRATES_IO_TOKEN:
         required: true
 
-concurrency:
-  group: crates-release-main
-  cancel-in-progress: false
-
 jobs:
   detect:
     runs-on: ubuntu-latest
