@@ -26,7 +26,7 @@ on:
       plotly_script_path:
         type: string
         required: false
-        default: .github/scripts/bench/render_criterion_plotly.py
+        default: .ci/.github/scripts/bench/render_criterion_plotly.py
 
 permissions:
   contents: read
@@ -59,7 +59,7 @@ jobs:
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           GITHUB_EVENT_BEFORE: ${{ github.event.before }}
           GITHUB_SHA: ${{ github.sha }}
-          PACKAGE_VERSION_FILE: ${{ inputs.package_version_file }}
+          PACKAGE_MANIFEST: ${{ inputs.package_manifest }}
         run: python3 .ci/.github/scripts/bench/should_run_benchmark_pages.py
 
   build:
@@ -90,14 +90,16 @@ jobs:
         env:
           BENCH_PROFILE: ${{ inputs.bench_profile }}
         run: |
+          set -euo pipefail
           rm -rf target/criterion
           ${{ inputs.run_command }}
 
       - name: Render Plotly comparison report
         run: |
+          set -euo pipefail
           python3 -m pip install --upgrade pip
           python3 -m pip install plotly
-          python3 .ci/.github/scripts/bench/render_criterion_plotly.py
+          python3 "${{ inputs.plotly_script_path }}"
 
       - name: Prepare Pages site
         run: |
