@@ -27,10 +27,13 @@ on:
         type: boolean
         required: false
         default: true
+      ci_ref:
+        type: string
+        required: false
+        default: v0
     secrets:
       CRATES_IO_TOKEN:
         required: true
-
 jobs:
   detect:
     runs-on: ubuntu-latest
@@ -47,15 +50,20 @@ jobs:
           fetch-depth: 0
 
       - name: Checkout CI scripts
-        uses: actions/checkout@v5
-        with:
-          repository: jcfangc/ci
-          path: .ci
+        env:
+          CI_REF: ${{ inputs.ci_ref }}
+        run: |
+          rm -rf "$RUNNER_TEMP/ci"
+          git clone --depth 1 --branch "$CI_REF" \
+            https://github.com/jcfangc/ci \
+            "$RUNNER_TEMP/ci"
+          test -f "$RUNNER_TEMP/ci/.github/scripts/release/detect_version.py"
 
       - id: v
         name: Detect version
         env:
           PACKAGE_MANIFEST: ${{ inputs.package_manifest }}
+          GITHUB_EVENT_BEFORE: ${{ github.event.before || '' }}
         run: python3 "$RUNNER_TEMP/ci/.github/scripts/release/detect_version.py"
 
   publish_and_tag:
@@ -75,8 +83,15 @@ jobs:
           persist-credentials: true
 
       - name: Checkout CI scripts
+        env:
+          CI_REF: ${{ inputs.ci_ref }}
         run: |
-          git clone --depth 1 --branch v0 https://github.com/jcfangc/ci "$RUNNER_TEMP/ci"
+          rm -rf "$RUNNER_TEMP/ci"
+          git clone --depth 1 --branch "$CI_REF" \
+            https://github.com/jcfangc/ci \
+            "$RUNNER_TEMP/ci"
+          test -f "$RUNNER_TEMP/ci/.github/scripts/release/publish.py"
+          test -f "$RUNNER_TEMP/ci/.github/scripts/release/tag_release.py"
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
