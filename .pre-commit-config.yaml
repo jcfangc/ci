@@ -6,3 +6,11 @@ repos:
         entry: python3 -m py_compile
         language: system
         files: ^\.github/scripts/bench/.*\.py$
+
+      - id: release-ci-tag
+        name: release CI tag from pyproject version
+        entry: python3 scripts/release_ci.py --allow-noop
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
