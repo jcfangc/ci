@@ -1,12 +1,8 @@
-name: Reusable Rust Benchmark Pages
+name: Reusable Rust Divan Benchmark Pages
 
 on:
   workflow_call:
     inputs:
-      bench_profile:
-        type: string
-        required: false
-        default: report
       rust_toolchain:
         type: string
         required: false
@@ -18,15 +14,19 @@ on:
       pages_artifact_path:
         type: string
         required: false
-        default: target/criterion
+        default: target/divan-pages
       run_command:
         type: string
         required: false
-        default: cargo bench
+        default: cargo bench -- --color never
+      divan_output_path:
+        type: string
+        required: false
+        default: target/divan-pages/divan.txt
       plotly_script_path:
         type: string
         required: false
-        default: .ci/.github/scripts/bench/render_criterion_plotly.py
+        default: .ci/.github/scripts/bench/render_divan_plotly.py
 
 permissions:
   contents: read
@@ -63,7 +63,7 @@ jobs:
         run: python3 .ci/.github/scripts/bench/should_run_benchmark_pages.py
 
   build:
-    name: Build Criterion report
+    name: Build Divan report
     needs: gate
     if: needs.gate.outputs.should_run == 'true'
     runs-on: ubuntu-latest
@@ -86,17 +86,27 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
-      - name: Run Criterion benchmarks
+      - name: Run Divan benchmarks
         env:
-          BENCH_PROFILE: ${{ inputs.bench_profile }}
+          NO_COLOR: "1"
+          COLUMNS: "240"
+          DIVAN_OUTPUT_PATH: ${{ inputs.divan_output_path }}
         run: |
           set -euo pipefail
-          rm -rf target/criterion
-          ${{ inputs.run_command }}
+
+          rm -rf "${{ inputs.pages_artifact_path }}"
+          mkdir -p "$(dirname "$DIVAN_OUTPUT_PATH")"
+
+          ${{ inputs.run_command }} | tee "$DIVAN_OUTPUT_PATH"
 
       - name: Render Plotly comparison report
+        env:
+          DIVAN_PAGES_ROOT: ${{ inputs.pages_artifact_path }}
+          DIVAN_OUTPUT: ${{ inputs.divan_output_path }}
+          PLOTLY_REPORT_DIR: compare-plotly
         run: |
           set -euo pipefail
+
           python3 -m pip install --upgrade pip
           python3 -m pip install plotly
           python3 "${{ inputs.plotly_script_path }}"
@@ -105,12 +115,12 @@ jobs:
         run: |
           set -euo pipefail
 
-          test -f target/criterion/index.html
-          test -f target/criterion/.nojekyll
-          test -f target/criterion/report/index.html
-          test -f target/criterion/compare-plotly/index.html
+          test -f "${{ inputs.pages_artifact_path }}/index.html"
+          test -f "${{ inputs.pages_artifact_path }}/.nojekyll"
+          test -f "${{ inputs.pages_artifact_path }}/divan.txt"
+          test -f "${{ inputs.pages_artifact_path }}/compare-plotly/index.html"
 
-          find target/criterion -maxdepth 3 -type f | sort | sed -n '1,120p'
+          find "${{ inputs.pages_artifact_path }}" -maxdepth 3 -type f | sort | sed -n '1,120p'
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
