@@ -1,0 +1,8 @@
+repos:
+  - repo: local
+    hooks:
+      - id: python-compile-benchmark-scripts
+        name: py_compile benchmark scripts
+        entry: python3 -m py_compile
+        language: system
+        files: ^\.github/scripts/bench/.*\.py$
