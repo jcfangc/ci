@@ -14,7 +14,7 @@ TIME_RE = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*(ps|ns|µs|us|ms|s)\s*$")
 HEADER_RE = re.compile(
     r"^(?P<name>\S+)\s+fastest\s+│\s+slowest\s+│\s+median\s+│\s+mean\s+│"
 )
-ROW_RE = re.compile(r"^\s*[├╰]─\s+(?P<name>\S+)\s+(?P<rest>.+)$")
+ROW_RE = re.compile(r"^\s*(?:│\s*)*[├╰]─\s+(?P<name>\S+)\s+(?P<rest>.*)$")
 
 
 def time_to_ns(text: str) -> float:
@@ -24,6 +24,22 @@ def time_to_ns(text: str) -> float:
 
     value, unit = match.groups()
     return float(value) * TIME_UNITS[unit]
+
+
+def is_sample_row(cols: list[str]) -> bool:
+    if len(cols) < 6:
+        return False
+
+    fastest, slowest, median, mean, samples, iters = cols[:6]
+
+    return (
+        bool(fastest)
+        and bool(slowest)
+        and bool(median)
+        and bool(mean)
+        and samples.isdigit()
+        and iters.isdigit()
+    )
 
 
 def read_divan_samples(path: Path) -> list[Sample]:
@@ -40,7 +56,7 @@ def read_divan_samples(path: Path) -> list[Sample]:
             continue
 
         cols = [col.strip() for col in row.group("rest").split("│")]
-        if len(cols) < 6:
+        if not is_sample_row(cols):
             continue
 
         name = row.group("name")
