@@ -7,10 +7,6 @@ on:
         type: string
         required: false
         default: stable
-      package_manifest:
-        type: string
-        required: false
-        default: Cargo.toml
       pages_artifact_path:
         type: string
         required: false
@@ -34,38 +30,8 @@ permissions:
   id-token: write
 
 jobs:
-  gate:
-    name: Check version change
-    runs-on: ubuntu-latest
-
-    outputs:
-      should_run: ${{ steps.gate.outputs.should_run }}
-
-    steps:
-      - name: Checkout caller repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Checkout CI scripts
-        uses: actions/checkout@v4
-        with:
-          repository: jcfangc/ci
-          path: .ci
-
-      - name: Check whether benchmark pages should run
-        id: gate
-        env:
-          GITHUB_EVENT_NAME: ${{ github.event_name }}
-          GITHUB_EVENT_BEFORE: ${{ github.event.before }}
-          GITHUB_SHA: ${{ github.sha }}
-          PACKAGE_MANIFEST: ${{ inputs.package_manifest }}
-        run: python3 .ci/.github/scripts/bench/should_run_benchmark_pages.py
-
   build:
     name: Build Divan report
-    needs: gate
-    if: needs.gate.outputs.should_run == 'true'
     runs-on: ubuntu-latest
 
     steps:
