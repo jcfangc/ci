@@ -64,9 +64,9 @@ jobs:
           set -euo pipefail
 
           rm -rf "${{ inputs.pages_artifact_path }}"
-          mkdir -p "$(dirname "$DIVAN_OUTPUT_PATH")"
 
           cargo clean
+          mkdir -p "$(dirname "$DIVAN_OUTPUT_PATH")"
           ${{ inputs.run_command }} | tee "$DIVAN_OUTPUT_PATH"
 
       - name: Render Plotly comparison report
