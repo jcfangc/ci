@@ -51,9 +51,12 @@ jobs:
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
+        with:
+          cache-targets: "false"
 
       - name: Run Divan benchmarks
         env:
+          RUSTFLAGS: "-C target-cpu=native"
           NO_COLOR: "1"
           COLUMNS: "240"
           DIVAN_OUTPUT_PATH: ${{ inputs.divan_output_path }}
@@ -63,6 +66,7 @@ jobs:
           rm -rf "${{ inputs.pages_artifact_path }}"
           mkdir -p "$(dirname "$DIVAN_OUTPUT_PATH")"
 
+          cargo clean
           ${{ inputs.run_command }} | tee "$DIVAN_OUTPUT_PATH"
 
       - name: Render Plotly comparison report
