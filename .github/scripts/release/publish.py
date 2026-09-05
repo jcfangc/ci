@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import time
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
@@ -14,6 +15,8 @@ from urllib.request import Request, urlopen
 
 WORKSPACE_ROOT = Path.cwd()
 PACKAGE_MANIFEST = Path(os.environ.get("PACKAGE_MANIFEST", "Cargo.toml"))
+REGISTRY_POLL_ATTEMPTS = 30
+REGISTRY_POLL_DELAY_SECONDS = 5
 
 
 def is_real_release() -> bool:
@@ -91,8 +94,27 @@ def registry_version_available(name: str, version: str) -> bool:
         raise RuntimeError(f"could not query crates.io for {name} {version}") from error
 
 
+def wait_for_registry_version(name: str, version: str) -> bool:
+    """Wait for an exact crate version to become visible on crates.io."""
+    for attempt in range(1, REGISTRY_POLL_ATTEMPTS + 1):
+        try:
+            if registry_version_available(name, version):
+                return True
+        except RuntimeError as error:
+            print(f"registry visibility check failed: {error}")
+
+        if attempt < REGISTRY_POLL_ATTEMPTS:
+            print(
+                f"waiting for {name} {version} to become visible "
+                f"(attempt {attempt}/{REGISTRY_POLL_ATTEMPTS})"
+            )
+            time.sleep(REGISTRY_POLL_DELAY_SECONDS)
+
+    return False
+
+
 def publish_real_package(command: list[str], name: str, version: str) -> None:
-    """Publish once, treating an upload followed by a client error as success."""
+    """Publish once and reconcile Cargo's result with registry visibility."""
     if registry_version_available(name, version):
         print(f"{name} {version} is already published; skipping")
         return
@@ -100,10 +122,13 @@ def publish_real_package(command: list[str], name: str, version: str) -> None:
     try:
         subprocess.run(command, cwd=WORKSPACE_ROOT, check=True)
     except subprocess.CalledProcessError:
-        if registry_version_available(name, version):
+        if wait_for_registry_version(name, version):
             print(f"{name} {version} is published despite cargo publish failure; continuing")
             return
         raise
+
+    if not wait_for_registry_version(name, version):
+        raise RuntimeError(f"{name} {version} did not become visible on crates.io")
 
 
 def main() -> None:

@@ -51,3 +51,27 @@ class PublishTests(unittest.TestCase):
             publish.main()
 
         self.assertEqual(run.call_count, 1)
+
+    def test_real_publish_polls_after_failure_until_version_is_visible(self) -> None:
+        with (
+            patch.dict(
+                os.environ,
+                {"GITHUB_EVENT_NAME": "push", "RELEASE_MODE": "real"},
+                clear=False,
+            ),
+            patch.object(publish, "package_identity", return_value=("demo", "1.2.3")),
+            patch.object(
+                publish,
+                "registry_version_available",
+                side_effect=[False, False, False, True],
+            ),
+            patch.object(publish, "REGISTRY_POLL_DELAY_SECONDS", 0),
+            patch.object(
+                publish.subprocess,
+                "run",
+                side_effect=subprocess.CalledProcessError(1, ["cargo", "publish"]),
+            ) as run,
+        ):
+            publish.main()
+
+        self.assertEqual(run.call_count, 1)
