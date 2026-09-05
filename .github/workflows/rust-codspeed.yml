@@ -6,7 +6,15 @@ on:
       rust_toolchain:
         type: string
         required: false
-        default: stable
+        default: "1.98.1"
+      cargo_codspeed_version:
+        type: string
+        required: false
+        default: "5.0.1"
+      runner:
+        type: string
+        required: false
+        default: ubuntu-24.04
       build_command:
         type: string
         required: false
@@ -22,24 +30,24 @@ permissions:
 jobs:
   benchmarks:
     name: Run CodSpeed benchmarks
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
 
     steps:
       - name: Checkout caller repository
         uses: actions/checkout@v4
 
       - name: Setup Rust and cargo-codspeed
-        uses: moonrepo/setup-rust@v0
+        uses: moonrepo/setup-rust@cafffba5d5c8bc38a5120e6e60f3561d541a47cd # v0.6.1
         with:
           channel: ${{ inputs.rust_toolchain }}
           cache-target: release
-          bins: cargo-codspeed
+          bins: cargo-codspeed@${{ inputs.cargo_codspeed_version }}
 
       - name: Build benchmark targets
         run: ${{ inputs.build_command }}
 
       - name: Run regression benchmarks
-        uses: CodSpeedHQ/action@v4
+        uses: CodSpeedHQ/action@e736f0d2aeb36da38e9f08eca4dff7967408d154 # v4.8.2
         with:
           mode: simulation
           run: ${{ inputs.run_command }}
