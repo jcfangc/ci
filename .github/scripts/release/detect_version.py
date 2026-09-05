@@ -31,15 +31,31 @@ def run_git(*args: str) -> str:
 
 
 def read_version(content: bytes | str) -> str:
-    """Read package.version from Cargo.toml content."""
+    """Read package.version, including workspace-inherited versions."""
     if isinstance(content, bytes):
         content = content.decode("utf-8")
 
     manifest = tomllib.loads(content)
-    try:
-        return str(manifest["package"]["version"]).strip()
-    except KeyError as err:
-        raise RuntimeError(f"missing [package].version in {MANIFEST}") from err
+    package = manifest.get("package")
+    if not isinstance(package, dict):
+        raise RuntimeError(f"missing [package] in {MANIFEST}")
+
+    version = package.get("version")
+    if isinstance(version, str) and version.strip():
+        return version.strip()
+
+    if isinstance(version, dict) and version.get("workspace") is True:
+        workspace = manifest.get("workspace")
+        workspace_package = workspace.get("package") if isinstance(workspace, dict) else None
+        workspace_version = (
+            workspace_package.get("version")
+            if isinstance(workspace_package, dict)
+            else None
+        )
+        if isinstance(workspace_version, str) and workspace_version.strip():
+            return workspace_version.strip()
+
+    raise RuntimeError(f"missing usable [package].version in {MANIFEST}")
 
 
 def current_version() -> str:
